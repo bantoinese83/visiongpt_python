@@ -1,4 +1,5 @@
-# Conversation Manager
+# VisionGpt AI Assistant
+
 
 This project is a voice-activated assistant that can play YouTube videos, analyze images, and carry out text-to-speech and speech-to-text conversions.
 
