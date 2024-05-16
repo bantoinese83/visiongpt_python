@@ -1,7 +1,7 @@
 # VisionGpt AI Assistant
 
-
-This project is a voice-activated assistant that can play YouTube videos, analyze images, and carry out text-to-speech and speech-to-text conversions.
+This project is a voice-activated assistant that can play YouTube videos, analyze images, and carry out text-to-speech
+and speech-to-text conversions.
 
 ## Features
 
@@ -29,11 +29,20 @@ This project is a voice-activated assistant that can play YouTube videos, analyz
 
 1. Clone the repository
 2. Install the dependencies
-3. Run `main.py`
+3. Set up the OpenAI API key create config.ini file in the root directory and add the following content:
+
+```
+[
+openai
+]
+API_KEY=
+```
 
 ## Usage
 
-Start the conversation manager by running `main.py`. The assistant will start listening for your commands. You can ask it to play a YouTube video by saying "play" followed by the name of the video. You can also ask it to analyze an image by saying "analyze image".
+Start the conversation manager by running `main.py`. The assistant will start listening for your commands. You can ask
+it to play a YouTube video by saying "play" followed by the name of the video. You can also ask it to analyze an image
+by saying "analyze image".
 
 ## License
 
