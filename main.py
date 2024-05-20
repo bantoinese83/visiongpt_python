@@ -3,8 +3,8 @@ import os
 import queue
 import threading
 import time
-import pywhatkit
 
+import pywhatkit
 import cv2
 import noisereduce as nr
 import numpy as np
@@ -50,6 +50,7 @@ class ConversationManager:
         self.camera_opened = False
         self.cap = None
         self.cap_lock = threading.Lock()
+        self.recording = False  # New state variable to track recording state
 
     def get_greeting(self):
         if 5 <= self.current_hour < 7:
@@ -94,7 +95,6 @@ class ConversationManager:
         processing_thread.join()
 
         self.stop_event.wait()
-
         logger.info("Conversation ended.")
 
     def listen_for_interrupt(self):
@@ -156,20 +156,26 @@ class ConversationManager:
     def record_audio(self):
         while not self.stop_event.is_set():
             try:
-                print("Sound detected, start recording...")
-                self.play_sound("assets/rec_start_stop_3.mp3")
+                if not self.recording:
+                    if self.is_sound_detected():
+                        print("Sound detected, start recording...")
+                        self.play_sound("assets/rec_start_stop_3.mp3")
+                        self.recording = True
+
                 user_voice = sd.rec(int(self.DURATION * self.FS), samplerate=self.FS, channels=1, dtype='float64')
                 sd.wait()
                 if user_voice.size > 0:
                     if not self.stop_event.is_set():
                         self.audio_queue.put(user_voice)
                         self.update_average_volume(user_voice)
-                        if self.is_sound_detected():
-                            print("Sound detected, continue recording...")
-                            self.play_sound("assets/rec_start_stop_1.mp3")
-                        else:
+                        if self.is_sound_detected() and not self.recording:
+                            print("Sound detected, start recording...")
+                            self.play_sound("assets/rec_start_stop_3.mp3")
+                            self.recording = True
+                        elif not self.is_sound_detected() and self.recording:
                             print("Silence detected, stop recording...")
                             self.play_sound("assets/rec_start_stop_2.mp3")
+                            self.recording = False
                             time.sleep(1)
                 else:
                     print("No audio data detected.")
@@ -213,11 +219,16 @@ class ConversationManager:
     def generate_and_speak_response(self, user_text):
         try:
             print("AI is thinking...")
+            self.print_and_speak("Let me think for a moment.")
             ai_response = self.text_generator.generate_text(user_text)
-            print(f"AI Response: {ai_response}")
-            self.print_and_speak(ai_response)
-            self.last_ai_response = ai_response
-            time.sleep(1)
+            if ai_response:
+                print(f"AI Response: {ai_response}")
+                self.print_and_speak(ai_response)
+                self.last_ai_response = ai_response
+            else:
+                print("Sorry, I couldn't find a response right now. Please wait.")
+                self.print_and_speak("Sorry, just a moment. I'm still thinking.")
+                self.print_and_speak("Thank you for waiting. Is there anything else I can assist you with?")
         except Exception as generate_error:
             logger.error(f"Error in text generation: {generate_error}")
 
