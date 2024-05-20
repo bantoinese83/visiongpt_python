@@ -3,7 +3,6 @@ import os
 import queue
 import threading
 import time
-import configparser
 import pywhatkit
 
 import cv2
@@ -33,18 +32,18 @@ ENERGY_THRESHOLD = 0.1  # Energy threshold for VAD
 ENERGY_DECAY = 0.99  # Decay factor for energy calculation
 ENERGY_THRESHOLD_MULTIPLIER = 1.5  # Multiplier for adjusting energy threshold
 
+# API Key Constant
+API_KEY = ''
+
 # Global variables
 AUDIO_QUEUE = queue.Queue()
-
+CAMERA_OPENED = False
+cap = None
 
 class ConversationManager:
-    def __init__(self, user_name, bot_name):
-        config = configparser.ConfigParser()
-        config.read('config.ini')
-        api_key = config['DEFAULT']['API_KEY']
+    def __init__(self, user_name, bot_name, api_key):
         self.user_name = user_name
         self.bot_name = bot_name
-        self.api_key = api_key
         self.api_key = api_key
         self.tts_service = TextToSpeech(api_key)
         self.stt_service = SpeechToText(api_key)
@@ -108,6 +107,8 @@ class ConversationManager:
             if user_input in ['stop', 'exit', 'quit', 'end']:
                 logger.info("User interrupted the conversation")
                 self.stop_event.set()
+                if CAMERA_OPENED:
+                    self.close_camera()
 
     def process_audio(self):
         lock = threading.Lock()
@@ -137,7 +138,9 @@ class ConversationManager:
                         self.print_and_speak(f"Playing {search_query} on YouTube.")
                         skip_response = True  # Set the flag to skip the AI response
 
-                    if "analyze image" in user_text.lower():
+                    if "camera" in user_text.lower():
+                        self.open_camera()
+                    elif "analyze image" in user_text.lower():
                         self.analyze_image()
                     elif not skip_response:  # Check the flag before generating an AI response
                         self.generate_and_speak_response(user_text)
@@ -187,31 +190,39 @@ class ConversationManager:
                 print(f"An error occurred while recording audio: {str(e)}")
                 break
 
+    def open_camera(self):
+        global CAMERA_OPENED, cap
+        if not CAMERA_OPENED:
+            cap = cv2.VideoCapture(0)
+            if cap.isOpened():
+                CAMERA_OPENED = True
+                self.print_and_speak("Camera is now open.")
+            else:
+                self.print_and_speak("Failed to open the camera.")
+
+    def close_camera(self):
+        global CAMERA_OPENED, cap
+        if CAMERA_OPENED and cap is not None:
+            cap.release()
+            CAMERA_OPENED = False
+            self.print_and_speak("Camera is now closed.")
+
     def analyze_image(self):
-        # Capture from the default camera
-        cap = cv2.VideoCapture(0)
-        fps = cap.get(cv2.CAP_PROP_FPS)  # Get the frames per second of the video
-        frames_to_capture = int(3 * fps)  # Calculate the number of frames to capture for 3 seconds
-
-        frames = []
-        for i in range(frames_to_capture):
+        global CAMERA_OPENED, cap
+        if CAMERA_OPENED and cap is not None:
             ret, frame = cap.read()
-            if not ret:
-                break
-            frames.append(frame)
-
-        cap.release()
-
-        # Save the frames as images and analyze each one
-        if self.image_analyzer is None:
-            self.image_analyzer = ImageAnalyzer(self.api_key)
-
-        for i, frame in enumerate(frames):
-            image_path = f"camera_capture_{i}.png"
-            cv2.imwrite(image_path, frame)
-            analysis_results = self.image_analyzer.analyze_image(image_path)
-            print(f"Analysis results for frame {i}: {analysis_results}")
-            os.remove(image_path)
+            if ret:
+                image_path = "camera_capture.png"
+                cv2.imwrite(image_path, frame)
+                if self.image_analyzer is None:
+                    self.image_analyzer = ImageAnalyzer(self.api_key)
+                analysis_results = self.image_analyzer.analyze_image(image_path)
+                print(f"Analysis results: {analysis_results}")
+                os.remove(image_path)
+            else:
+                self.print_and_speak("Failed to capture an image.")
+        else:
+            self.print_and_speak("Camera is not open. Please say 'camera' to open the camera first.")
 
     def generate_and_speak_response(self, user_text):
         try:
@@ -223,6 +234,9 @@ class ConversationManager:
             time.sleep(1)
         except Exception as generate_error:
             logger.error(f"Error in text generation: {generate_error}")
+
+   
+
 
     def print_and_speak(self, message):
         print(message)
@@ -258,5 +272,5 @@ class ConversationManager:
 
 
 if __name__ == "__main__":
-    conversation_manager = ConversationManager(USER_NAME, BOT_NAME)
+    conversation_manager = ConversationManager(USER_NAME, BOT_NAME, API_KEY)
     conversation_manager.start_conversation()
