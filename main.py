@@ -107,46 +107,35 @@ class ConversationManager:
                     self.close_camera()
 
     def process_audio(self):
-        energy = None
-        user_voice = None
-        skip_response = False
         while not self.stop_event.is_set():
-            if not self.audio_queue.empty():
-                print("AI is listening...")
-                user_voice = self.audio_queue.get()
-                user_voice = self.reduce_noise(user_voice)
-                audio_file = "user_voice.wav"
-                write(audio_file, self.FS, user_voice)
-                try:
-                    user_text = self.stt_service.transcribe_audio(audio_file)
-                    if user_text == self.last_ai_response:
-                        continue
-                    print(f"User said: {user_text}")
-                except Exception as transcribe_error:
-                    logger.error(f"Error in transcription: {transcribe_error}")
-                    continue
-
-                if "play" in user_text.lower():
-                    search_query = user_text.replace("play", "").strip()
-                    pywhatkit.playonyt(search_query)
-                    self.print_and_speak(f"Playing {search_query} on YouTube.")
-                    skip_response = True
-
-                if "camera" in user_text.lower():
-                    self.open_camera()
-                elif "analyze image" in user_text.lower():
-                    self.analyze_image()
-                elif not skip_response:
-                    self.generate_and_speak_response(user_text)
-
-                skip_response = False
-
-            if user_voice is not None:
-                energy = self.calculate_energy(user_voice)
-                self.adjust_energy_threshold(energy)
-
-            self.audio_queue.queue.clear()
-            time.sleep(1 if energy is not None and energy > self.energy_threshold else 0.1)
+            try:
+                audio_data = self.audio_queue.get()
+                if audio_data.size > 0:
+                    self.audio_data = audio_data
+                    energy = self.calculate_energy(audio_data)
+                    self.adjust_energy_threshold(energy)
+                    if energy > self.energy_threshold:
+                        audio_data = self.reduce_noise(audio_data)
+                        write("user_audio.wav", self.FS, audio_data)
+                        user_text = self.stt_service.transcribe_audio("user_audio.wav")
+                        if user_text:
+                            print(f"User: {user_text}")
+                            if user_text.lower() == "camera":
+                                self.analyze_image()
+                            elif user_text.lower() == "open camera":
+                                self.open_camera()
+                            elif user_text.lower() == "close camera":
+                                self.close_camera()
+                            else:
+                                self.generate_and_speak_response(user_text)
+                        else:
+                            print("Sorry, I couldn't understand what you said. Please try again.")
+                            self.print_and_speak("Sorry, I couldn't understand what you said. Please try again.")
+                    else:
+                        print("Silence detected.")
+            except Exception as e:
+                print(f"An error occurred while processing audio: {str(e)}")
+                break
 
     @staticmethod
     def play_sound(sound_file):
